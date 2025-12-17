@@ -43,7 +43,7 @@ A simple client-server chat application built using Python's `socket` library. T
 
 ## Technologies Used
 * **Language:** Python 3
-* **Library:** `socket` (Standard Library)
+* **Library:** `socket`, `threading` (Standard Libraries)
 * **Protocol:** TCP/IP
 
 ## Project Goal
