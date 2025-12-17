@@ -64,6 +64,12 @@ def start_client():
             print("[EXIT] Exiting chat...")
             try:
                 client_socket.sendall("bye".encode('utf-8')) #send bye message to inform server
+            except BrokenPipeError:
+                print("[!] Error: Server connection lost")
+                break
+            except ConnectionResetError:
+                print("[!] Error: Connection was forcibly closed by the server.")
+                break
             except Exception as e:
                 print(f"[EXIT] Exiting chat with error {e}")
             break

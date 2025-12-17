@@ -1,7 +1,8 @@
 import socket
 import threading
 
-HOST = "127.0.0.1" #Change as per requirements (LAN wifi/Tunneling/etc)
+#0.0.0.0 listens for connections on every IP address this connection has
+HOST = "0.0.0.0" #Change as per requirements (LAN wifi/Tunneling/etc)
 PORT = 65432
 clients = [] #Global list of clients
 
