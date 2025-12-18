@@ -1,8 +1,10 @@
 import socket
 import sys
 import threading
+import os
 
-HOST = "127.0.0.1" #This can be changed as per required
+
+DEFAULT_HOST = "127.0.0.1" #This can be changed as per required
 PORT = 65432
 
 def receive_messages(client_socket):
@@ -17,7 +19,7 @@ def receive_messages(client_socket):
             if not message:
                 print(f"\n[DISCONNECTED] Server closed connection")
                 client_socket.close()
-                sys.exit()
+                os._exit(0)
 
             print(f"[SERVER] {message}")
             print(f"\nYou: ", end="", flush=True)
@@ -37,6 +39,14 @@ def receive_messages(client_socket):
             break
 
 def start_client():
+    HOST = DEFAULT_HOST
+    try:
+        target_ip = input("Enter server IPv4 (Press Enter for Local Host): ")
+        if target_ip != "":
+            HOST = target_ip
+    except Exception as e:
+        print(f"[ERROR] Input error: {e}")
+
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         client_socket.connect((HOST, PORT))
