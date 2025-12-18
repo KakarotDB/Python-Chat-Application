@@ -11,6 +11,11 @@ A simple client-server chat application built using Python's `socket` library. T
 ## Prerequisites
 * Python 3.x installed on your machine.
 
+## How to run (using executables)
+1. Go to dist/ folder and download **client.exe** executable
+2. Enter the IPv4 address and connect with local network !
+3. Similar procedure for the **server.exe** executable
+
 ## How to Run (local machine)
 1.  **Start the Server:**
     Open your terminal and run the server first to start listening for connections:
