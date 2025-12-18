@@ -11,8 +11,7 @@ A simple client-server chat application built using Python's `socket` library. T
 ## Prerequisites
 * Python 3.x installed on your machine.
 
-## How to Run
-(Currently this works on the local machine only)
+## How to Run (local machine)
 1.  **Start the Server:**
     Open your terminal and run the server first to start listening for connections:
     ```bash
@@ -28,9 +27,23 @@ A simple client-server chat application built using Python's `socket` library. T
 3.  **Start Chatting:**
     Type a message in the client terminal and press Enter to send it to the server.
 
+## How to Run (local network)
+1. **Start the server**
+    Open a terminal and run the server to start listening to any connections on the local network (make sure the host is "0.0.0.0")
+    ```bash
+    python server.py
+    ```
+2. **Start the Client**
+    On another machine over the same network, connect to the IPv4 address (found using ipconfig on windows systems) and replace the HOST to required IPv4 address
+   ```bash
+    python client.py
+    ```
+3. **Start Chatting**
+    Now messages can be sent and received via different machines over the same local network
+
 ## Technologies Used
 * **Language:** Python 3
-* **Library:** `socket` (Standard Library)
+* **Library:** `socket`, `threading` (Standard Libraries)
 * **Protocol:** TCP/IP
 
 ## Project Goal
