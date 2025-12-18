@@ -10,6 +10,7 @@ A simple client-server chat application built using Python's `socket` library. T
 
 ## Prerequisites
 * Python 3.x installed on your machine.
+* OR Simply install the client.exe/server.exe files
 
 ## How to run (using executables)
 1. Go to dist/ folder and download **client.exe** executable
