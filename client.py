@@ -5,7 +5,7 @@ import os
 
 
 DEFAULT_HOST = "127.0.0.1" #This can be changed as per required
-PORT = 65432
+DEFAULT_PORT = 65432
 
 def receive_messages(client_socket):
     """
@@ -40,12 +40,21 @@ def receive_messages(client_socket):
 
 def start_client():
     HOST = DEFAULT_HOST
+    PORT = DEFAULT_PORT
     try:
         target_ip = input("Enter server IPv4 (Press Enter for Local Host): ")
         if target_ip != "":
             HOST = target_ip
+    except EOFError:
+        print(f"\n[INFO] Input not available. Using default host: {DEFAULT_HOST}")
     except Exception as e:
         print(f"[ERROR] Input error: {e}")
+    try:
+        target_port = input("Enter port (press enter for port 65432): ")
+        if target_port != "":
+            PORT = int(target_port)
+    except Exception as e:
+        print(f"[ERROR] Input error : {e}")
 
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
@@ -84,7 +93,10 @@ def start_client():
                 print(f"[EXIT] Exiting chat with error {e}")
             break
 
-    client_socket.close()
+    try:
+        client_socket.close()
+    except Exception:
+        pass
 
 if __name__ == "__main__":
     try:

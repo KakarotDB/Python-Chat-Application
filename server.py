@@ -18,7 +18,7 @@ def broadcast(message, source_connection=None):
                 clients.remove(client)
 
 def handle_client(connection, address):
-    print(f"[NEW CONNECTION] {address} Connected")
+    print(f"[NEW CONNECTION] {address} Connected", flush=True)
     connected = True
 
     while connected:
@@ -58,6 +58,7 @@ def start_server():
         while True:
             try:
                 connection, address = server.accept()
+                print("DEBUG: A raw connection just touched the server!", flush=True)
 
                 clients.append(connection)
                 thread = threading.Thread(target=handle_client, args=(connection, address))
