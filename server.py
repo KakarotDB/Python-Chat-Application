@@ -1,10 +1,22 @@
 import socket
 import threading
+import db_manager
+db_manager.initialize_database()
 
 #0.0.0.0 listens for connections on every IP address this connection has
 HOST = "0.0.0.0" #Change as per requirements (LAN wifi/Tunneling/etc)
 PORT = 65432
 clients = [] #Global list of clients
+
+def write():
+    """Constant loop to listen for admin input from server side"""
+    while True:
+        try:
+            message = input("")
+            broadcast(f"[ADMIN]: {message}".encode('utf-8'), source_connection=None)
+        except Exception as e:
+            print(f"[ERROR] Admin input failed : {e}")
+            break
 
 def broadcast(message, source_connection=None):
     """
@@ -17,34 +29,62 @@ def broadcast(message, source_connection=None):
             except:
                 clients.remove(client)
 
-def handle_client(connection, address):
+def handle_client(client, address):
     print(f"[NEW CONNECTION] {address} Connected", flush=True)
-    connected = True
+    client_ip = address[0]
 
-    while connected:
-        try:
-            data = connection.recv(1024)
-            if not data:
+    try:
+        existing_user = db_manager.get_user_by_ip(client_ip)
+        if existing_user:
+            registered_name = existing_user[0]
+            client.send(f"Welcome back, {registered_name}! Please enter your password: ".encode('utf-8'))
+
+            password = client.recv(1024).decode('utf-8').strip()
+            username = db_manager.verify_login(client_ip, password)
+
+            if not username:
+                client.send("Wrong password!. Disconnecting...".encode('utf-8'))
+                print(f"[DISCONNECTED] {client}:{address} Disconnected")
+                print(f"[ACTIVE CONNECTIONS] {len(clients)}")
+                client.close()
+                return
+            else:
+                client.send(f"Login successfull! Welcome {username}. You are now logged in.".encode('utf-8'))
+        else:
+            client.send("Welcome! You are new. Please enter a username: ".encode('utf-8'))
+            new_username = client.recv(1024).decode('utf-8').strip()
+            client.send("Create a password: ".encode('utf-8'))
+            new_password = client.recv(1024).decode('utf-8').strip()
+
+            success = db_manager.register_user(client_ip, new_username, new_password)
+            if success:
+                username = new_username
+                client.send("Registration Successful! You are now logged in.".encode('utf-8'))
+            else:
+                client.send("Username taken or error. Try reconnecting.".encode('utf-8'))
+                client.close()
+                return
+
+        clients.append(client)
+        print(f"[ACTIVE CONNECTIONS] {len(clients)}")
+        broadcast(f"{username} has joined the chat!".encode('utf-8'), source_connection=client)
+
+        while True:
+            msg = client.recv(1024)
+            if not msg:
                 break
 
-            message = data.decode('utf-8')
+            print(f"{username} : {msg.decode('utf-8')}")
+            broadcast(f"{username}: {msg.decode('utf-8')}".encode('utf-8'), source_connection=client)
+    except Exception as e:
+        print(f"[ERROR] {address}: {e}")
+    finally:
+        if client in clients:
+            clients.remove(client)
+        client.close()
+        print(f"[DISCONNECTED] {username if 'username' in locals() else address} left.")
+        print(f"[ACTIVE CONNECTIONS] {len(clients)}")
 
-            if  message.lower() == "bye":
-                connected = False
-            else:
-                final_msg = f"Client {address[1]}: {message}"
-                print(f"[BROADCAST] {final_msg}")
-                broadcast(final_msg.encode('utf-8'), connection)
-        except ConnectionResetError:
-            break
-
-    if connection in clients:
-        clients.remove(connection)
-
-    connection.close()
-
-    print(f"[CLOSED] Connection with {address} closed.")
-    print(f"[ACTIVE CONNECTIONS] {len(clients)}")
 
 
 def start_server():
@@ -54,18 +94,17 @@ def start_server():
     server.listen()
     print(f"[LISTENING] Server is listening on {HOST}:{PORT}")
     server.settimeout(1.0)
+
+    admin_thread = threading.Thread(target=write)
+    admin_thread.daemon = True
+    admin_thread.start()
     try:
         while True:
             try:
                 connection, address = server.accept()
-                print("DEBUG: A raw connection just touched the server!", flush=True)
-
-                clients.append(connection)
                 thread = threading.Thread(target=handle_client, args=(connection, address))
                 thread.daemon = True
                 thread.start()
-
-                print(f"[ACTIVE CONNECTIONS] {threading.active_count() - 1}")
             except socket.timeout:
                 continue
     except KeyboardInterrupt:

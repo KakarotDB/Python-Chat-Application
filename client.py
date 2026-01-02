@@ -21,22 +21,13 @@ def receive_messages(client_socket):
                 client_socket.close()
                 os._exit(0)
 
-            print(f"[SERVER] {message}")
-            print(f"\nYou: ", end="", flush=True)
+            print(f"\r[SERVER] {message}\nYou: ", end="", flush=True)
         except OSError:
             break
-        except KeyboardInterrupt:
-            print("[ERROR] Connection lost.")
-            break
-        except ConnectionResetError:
-            print("[CONNECTION RESET]")
-            break
-        except ConnectionAbortedError:
-            print("[CONNECTION ABORTED]")
-            break
         except Exception as e:
-            print(f"[ERROR] Connection lost : {e}")
-            break
+            print(f"\n[ERROR] Connection lost : {e}")
+            client_socket.close()
+            os._exit(0)
 
 def start_client():
     HOST = DEFAULT_HOST
@@ -65,6 +56,26 @@ def start_client():
 
     print("[CONNECTED] Connected to server!")
 
+    while True:
+        try:
+            message = client_socket.recv(1024).decode('utf-8')
+            print(message)
+
+            if "Wrong password" in message or "Username taken" in message:
+                client_socket.close()
+                return
+
+            if "logged in" in message:
+                break
+
+            response = input("")
+            client_socket.sendall(response.encode('utf-8'))
+        except ConnectionResetError:
+            print("[ERROR] Server hung up during login.")
+            return
+    print("\n" + "=" * 30)
+    print("      ENTERING CHAT ROOM      ")
+    print("=" * 30)
     # Start the listener thread
     receive_thread = threading.Thread(target=receive_messages, args=(client_socket,))
     receive_thread.daemon = True
@@ -72,34 +83,31 @@ def start_client():
 
     while True:
         try:
-            message = input("You: ")
-
+            message = input("")
+            # sys.stdout.write("\003[F")
             if message.lower() == "bye":
                 client_socket.sendall(message.encode('utf-8'))
                 break
 
             client_socket.sendall(message.encode('utf-8'))
+            print("You: ", end="", flush=True)
         except(KeyboardInterrupt, OSError, EOFError):
             print("[EXIT] Exiting chat...")
             try:
                 client_socket.sendall("bye".encode('utf-8')) #send bye message to inform server
-            except BrokenPipeError:
-                print("[!] Error: Server connection lost")
-                break
-            except ConnectionResetError:
-                print("[!] Error: Connection was forcibly closed by the server.")
-                break
-            except Exception as e:
-                print(f"[EXIT] Exiting chat with error {e}")
+            except:
+                pass
             break
 
     try:
         client_socket.close()
-    except Exception:
+    except:
         pass
 
 if __name__ == "__main__":
     try:
         start_client()
+    except KeyboardInterrupt:
+        print("\n[EXIT] Client stopped by user")
     except Exception as e:
-       print(f"\n[FORCE EXIT] Client Stopped with Exception {e}")
+        print(f"\n[FORCE EXIT] Client stopped with exception {e}")
