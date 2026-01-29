@@ -71,8 +71,6 @@ class ChatClient:
         while self.connected:
             try:
                 msg = input("")
-                # Visual cleanup (optional)
-                sys.stdout.write("\033[F") 
 
                 if msg.lower() == "bye":
                     self.sock.sendall(msg.encode('utf-8'))
@@ -83,7 +81,6 @@ class ChatClient:
                 print(f"You: {msg}")
                 self.sock.sendall(msg.encode('utf-8'))
                 
-                # Restore Prompt
                 print("You: ", end="", flush=True)
 
             except (KeyboardInterrupt, EOFError):

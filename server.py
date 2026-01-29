@@ -12,11 +12,14 @@ class ChatServer:
         self.clients = []
         self.running = False
         
-        db_manager.initialize_database
+        db_manager.initialize_database()
         
     def start(self): #Start the server 
         self.server_socket.bind((self.host, self.port))
         self.server_socket.listen()
+        
+        self.server_socket.settimeout(1.0)
+        
         self.running = True
         
         print(f"[LISTENING] Server is listening on {self.host}:{self.port}")
@@ -27,10 +30,13 @@ class ChatServer:
         
         try:
             while self.running:
-                connection, address = self.server_socket.accept()
-                thread = threading.Thread(target=self.handle_client, args=(connection, address))
-                thread.daemon = True
-                thread.start()
+                try: 
+                    connection, address = self.server_socket.accept()
+                    thread = threading.Thread(target=self.handle_client, args=(connection, address))
+                    thread.daemon = True
+                    thread.start()
+                except socket.timeout:
+                    continue
         except:
             print("\n[STOPPING] Server is shutting down...")
         finally:
@@ -89,31 +95,44 @@ class ChatServer:
     def authenticate_user(self, client, client_ip):
         existing_user = db_manager.get_user_by_ip(client_ip)
         
+        existing_user = db_manager.get_user_by_ip(client_ip)
+        
         if existing_user:
             registered_name = existing_user[0]
             client.send(f"Welcome back, {registered_name}! Please enter your password: ".encode('utf-8'))
-            password = client.recv(1024).decode('utf-8').strip()
-            username = db_manager.verify_login(client_ip, password)
             
-            if not username:
-                client.send("Wrong password! Disconnecting...".encode('utf-8'))
-                client.close()
+            try:
+                password = client.recv(1024).decode('utf-8').strip()
+                username = db_manager.verify_login(client_ip, password)
+                
+                if not username:
+                    client.send("Wrong password! Disconnecting...".encode('utf-8'))
+                    print(f"[REJECTED] {client_ip} : Wrong Password")
+                    client.close()
+                    return None
+                else:
+                    client.send(f"Login successful! Welcome {username}. You are now logged in.".encode('utf-8'))
+                    return username
+            except:
                 return None
-            else:
-                client.send(f"Login successfull! Welcome {username}.".encode())
+
         else:
             client.send("Welcome! You are new. Please enter a username: ".encode('utf-8'))
-            new_username = client.recv(1024).decode('utf-8').strip()
-            client.send("Create a password: ".encode('utf-8'))
-            new_password = client.recv(1024).decode('utf-8').strip()
-            
-            success = db_manager.register_user(client_ip, new_username, new_password)
-            if success:
-                client.send("Registration Successful! You are now logged in.".encode('utf-8'))
-                return new_username
-            else:
-                client.send("Username taken. Try reconnecting.".encode('utf-8'))
-                client.close()
+            try:
+                new_username = client.recv(1024).decode('utf-8').strip()
+                client.send("Create a password: ".encode('utf-8'))
+                new_password = client.recv(1024).decode('utf-8').strip()
+                
+                success = db_manager.register_user(client_ip, new_username, new_password)
+                if success:
+                    client.send("Registration Successful! You are now logged in.".encode('utf-8'))
+                    return new_username
+                else:
+                    client.send("Username taken. Try reconnecting.".encode('utf-8'))
+                    print(f"[REJECTED] {client_ip} : Username Taken") # <--- NEW LOG
+                    client.close()
+                    return None
+            except:
                 return None
             
     def admin_write(self):
@@ -125,6 +144,7 @@ class ChatServer:
                 break
             
 if __name__ == "__main__":
+    print("Starting server...")
     server = ChatServer("0.0.0.0", 65432)
-    server.start
+    server.start()
                         
