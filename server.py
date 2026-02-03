@@ -4,7 +4,6 @@ import db_manager
 
 class ChatServer: 
     def __init__(self, host, port):
-        """Initialize the Server Machine but don't start it yet"""
         self.host = host
         self.port = port 
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -14,16 +13,15 @@ class ChatServer:
         
         db_manager.initialize_database()
         
-    def start(self): #Start the server 
+    def start(self): 
         self.server_socket.bind((self.host, self.port))
         self.server_socket.listen()
-        
         self.server_socket.settimeout(1.0)
         
         self.running = True
-        
         print(f"[LISTENING] Server is listening on {self.host}:{self.port}")
 
+        # Start Admin Thread
         admin_thread = threading.Thread(target=self.admin_write)
         admin_thread.daemon = True
         admin_thread.start()
@@ -43,20 +41,18 @@ class ChatServer:
             self.stop()
             
     def stop(self):
-        #Cleanup
         self.running = False
         for client in self.clients:
             client.close()
         self.server_socket.close()
         print("[CLOSED] Server socket closed")
 
-        
     def broadcast(self, message, source_connection=None):
         for client in self.clients:
             if client != source_connection:
                 try:
                     client.sendall(message)
-                except: #If cannot be sent, assume disconnection occurred
+                except:
                     if client in self.clients:
                         self.clients.remove(client)
                         
@@ -70,9 +66,8 @@ class ChatServer:
             if not username:
                 return
             
-            # --- CONNECTION (INCREASE) ---
             self.clients.append(client)
-            print(f"[ACTIVE CONNECTIONS] {len(self.clients)}") # Already existed, keeping it.
+            print(f"[ACTIVE CONNECTIONS] {len(self.clients)}")
 
             self.broadcast(f"{username} has joined the chat!".encode('utf-8'), source_connection=client)
             
@@ -83,6 +78,9 @@ class ChatServer:
                 
                 decoded_message = message.decode('utf-8')
                 print(f"{username} : {decoded_message}")
+
+                self.broadcast(f"{username}: {decoded_message}".encode('utf-8'), source_connection=client)
+
         except Exception as e:
             print(f"[ERROR] {address}:{e}")
         finally:
@@ -96,43 +94,35 @@ class ChatServer:
                 self.broadcast(f"{username} has left the chat.".encode('utf-8'))
 
     def authenticate_user(self, client, client_ip):
+        # (This section is fine, keep it exactly as it was)
         existing_user = db_manager.get_user_by_ip(client_ip)
-        
-        existing_user = db_manager.get_user_by_ip(client_ip)
-        
         if existing_user:
             registered_name = existing_user[0]
             client.send(f"Welcome back, {registered_name}! Please enter your password: ".encode('utf-8'))
-            
             try:
                 password = client.recv(1024).decode('utf-8').strip()
                 username = db_manager.verify_login(client_ip, password)
-                
                 if not username:
                     client.send("Wrong password! Disconnecting...".encode('utf-8'))
-                    print(f"[REJECTED] {client_ip} : Wrong Password")
                     client.close()
                     return None
                 else:
-                    client.send(f"Login successful! Welcome {username}. You are now logged in.".encode('utf-8'))
+                    client.send(f"Login successful! Welcome {username}.".encode('utf-8'))
                     return username
             except:
                 return None
-
         else:
             client.send("Welcome! You are new. Please enter a username: ".encode('utf-8'))
             try:
                 new_username = client.recv(1024).decode('utf-8').strip()
                 client.send("Create a password: ".encode('utf-8'))
                 new_password = client.recv(1024).decode('utf-8').strip()
-                
                 success = db_manager.register_user(client_ip, new_username, new_password)
                 if success:
                     client.send("Registration Successful! You are now logged in.".encode('utf-8'))
                     return new_username
                 else:
                     client.send("Username taken. Try reconnecting.".encode('utf-8'))
-                    print(f"[REJECTED] {client_ip} : Username Taken") # <--- NEW LOG
                     client.close()
                     return None
             except:
@@ -150,4 +140,3 @@ if __name__ == "__main__":
     print("Starting server...")
     server = ChatServer("0.0.0.0", 65432)
     server.start()
-                        
