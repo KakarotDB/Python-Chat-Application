@@ -70,8 +70,9 @@ class ChatServer:
             if not username:
                 return
             
+            # --- CONNECTION (INCREASE) ---
             self.clients.append(client)
-            print(f"[ACTIVE CONNECTIONS] {len(self.clients)}")
+            print(f"[ACTIVE CONNECTIONS] {len(self.clients)}") # Already existed, keeping it.
 
             self.broadcast(f"{username} has joined the chat!".encode('utf-8'), source_connection=client)
             
@@ -86,7 +87,9 @@ class ChatServer:
             print(f"[ERROR] {address}:{e}")
         finally:
             if client in self.clients:
-                self.clients.remove
+                self.clients.remove(client) 
+                print(f"[ACTIVE CONNECTIONS] {len(self.clients)}")
+
             client.close()
             if username:
                 print(f"[DISCONNECTED] {username} left")
