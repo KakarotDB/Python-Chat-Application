@@ -94,7 +94,6 @@ class ChatServer:
                 self.broadcast(f"{username} has left the chat.".encode('utf-8'))
 
     def authenticate_user(self, client, client_ip):
-        # (This section is fine, keep it exactly as it was)
         existing_user = db_manager.get_user_by_ip(client_ip)
         if existing_user:
             registered_name = existing_user[0]
