@@ -1,8 +1,9 @@
 import sys
+import os
 from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QPushButton, 
                              QLineEdit, QTextEdit, QLabel, QStackedLayout, QMessageBox)
 from PyQt6.QtCore import QThread, pyqtSignal, Qt
-from PyQt6.QtGui import QFont
+from PyQt6.QtGui import QFont, QIcon, QPixmap
 
 
 from client_core import ChatClient 
@@ -114,17 +115,30 @@ class ChatWindow(QWidget):
         self.init_login_ui()
         self.init_chat_ui()
         self.setLayout(self.stack)
+        icon_path = "Python Chat Application logo.png"
+        self.setWindowIcon(QIcon(icon_path))
         
         self.worker = None 
 
     def init_login_ui(self):
         self.login_widget = QWidget()
         layout = QVBoxLayout()
-        layout.setSpacing(15)     # Add breathing room between elements
-        layout.setContentsMargins(40, 40, 40, 40) # Add padding around the edges
+        layout.setSpacing(15)     # Adding breathing room between elements
+        layout.setContentsMargins(40, 40, 40, 40) # Adding padding around the edges
         
-        # Add a big Title Label
-        title = QLabel("LOGIN")
+        logo_label = QLabel()
+        logo_path = "Python Chat Application logo.png"
+        pixmap = QPixmap(logo_path)
+        
+        if not pixmap.isNull():
+            scaled_pixmap = pixmap.scaled(120, 120, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            logo_label.setPixmap(scaled_pixmap)
+            logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            layout.addWidget(logo_label)
+        
+        
+        # Title Label
+        title = QLabel("ENTER SERVER CHAT ROOM")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title.setStyleSheet("font-size: 24px; color: white; letter-spacing: 2px;")
         layout.addWidget(title)
@@ -226,7 +240,6 @@ class ChatWindow(QWidget):
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     
-    # APPLY THE STYLESHEET HERE
     app.setStyleSheet(STYLESHEET)
     
     window = ChatWindow()

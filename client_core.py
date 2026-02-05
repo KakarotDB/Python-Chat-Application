@@ -19,7 +19,7 @@ class ChatClient:
             self.connected = True
             return True, "Connected successfully"
         except Exception as e:
-            # If it fails (server down, wrong IP), return the error so the UI can show it
+            # If it fails (server down/ wrong IP), return the error so the GUI can show it
             return False, str(e)
 
     def send_message(self, msg):
@@ -36,9 +36,8 @@ class ChatClient:
 
     def receive_once(self):
         """
-        Waits for exactly ONE message from the server.
-        We use this during login because we need to wait for prompts 
-        like 'Enter Password' before we can move on.
+        Waits for exactly one message 
+        Used for login prompts, etc.
         """
         try:
             msg = self.sock.recv(1024).decode('utf-8')
@@ -51,8 +50,8 @@ class ChatClient:
         Starts the background thread that listens for chat messages.
         
         We pass in a 'callback' function here.
-        This allows this core file to send text back to the GUI (or Terminal)
-        without needing to know how the GUI works.
+        This allows this core file to send text back to the wherever it has 
+        to be sent without knowing how the external application works
         """
         self.receive_thread = threading.Thread(
             target=self._listener_loop, 
@@ -63,10 +62,10 @@ class ChatClient:
         self.receive_thread.start()
 
     def _listener_loop(self, callback):
-        """The actual code running in the background thread."""
+        #The actual code running in the background thread
         while self.connected:
             try:
-                # This line blocks (waits) until data arrives
+                # This line blocks until data arrives
                 msg = self.sock.recv(1024).decode('utf-8')
                 
                 if not msg:
@@ -74,7 +73,7 @@ class ChatClient:
                     break
                 
                 # We execute the function we were given earlier.
-                # If we are in CLI, this prints. If in GUI, this updates the window.
+                # If we are in CLI, this prints else if in GUI, this updates the window.
                 callback(msg) 
             except:
                 break
