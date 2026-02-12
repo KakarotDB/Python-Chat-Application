@@ -274,60 +274,72 @@ class ChatWindow(QWidget):
         content = msg_dict.get("content", "")
         sender = msg_dict.get("sender", "Unknown")
         
-        # --- FIX 1: Handle Login Success explicitly ---
+        # 1. Handle Login Success
         if type == "LOGIN_SUCCESS":
-            self.my_username = content # Now we 100% know who we are
+            self.my_username = content
             self.append_to_history("#General", f"<div style='color:green'><i>Logged in as {content}</i></div>")
             return
 
+        # 2. Handle User List
         elif type == "USER_LIST":
             self.active_users_list.clear()
             for user in content:
                 if not user.startswith("#") and user != "Everyone": 
                     self.active_users_list.addItem(user)
                     
+        # 3. Handle System Messages
         elif type == "SYSTEM":
             self.append_to_history(self.current_chat, f"<div style='color:#888'><i>[SYSTEM]: {content}</i></div>")
 
+        # 4. Handle Chat Messages
         elif type == "CHAT":
             is_private = msg_dict.get("is_private", False)
             target_group = msg_dict.get("target_group", None)
             
+            # --- STEP A: Determine where this message belongs (Routing) ---
             chat_key = "#General" 
             
             if target_group:
-                # If it's a group, the key is the group name
-                # OR if it's a Private Echo, the key is the Recipient (which server now puts in target_group)
+                # If server specifies a target (Group name OR Recipient name for echoes), use it.
                 chat_key = target_group
             elif is_private:
-                # Incoming DM from someone else
+                # If it's a private message I received, it goes under the Sender's name.
                 chat_key = sender
-                
+            
+            # Correction for Outgoing Messages (The "Self-DM" Fix)
             if sender == self.my_username:
-                if is_private:
+                # If I sent this, but the server didn't specify a target_group (recipient),
+                # or if the target_group is accidentally me, assume it belongs in my current window.
+                if chat_key == self.my_username or chat_key is None:
                     chat_key = self.current_chat
 
-            # --- COLOR FORMATTING ---
-            color = "orange"
-            if is_private: color = "#ff66b2" 
-            elif target_group and target_group.startswith("#"): color = "#66ff66" 
-            
+            # --- STEP B: Determine Look & Feel (Color/Name) ---
             display_sender = sender
+            color = "orange" # Default for public chat
+            
+            if is_private: 
+                color = "#ff66b2" # Pink for DMs
+            elif target_group and target_group.startswith("#"): 
+                color = "#66ff66" # Green for Groups
+
+            # Override if it's me
             if sender == self.my_username:
                 display_sender = "You"
-                color = "#4a90e2" 
-                
+                color = "#4a90e2" # Blue for me
+
             formatted_msg = f"<div style='margin-bottom:5px;'><span style='color:{color}; font-weight:bold;'>{display_sender}:</span> {content}</div>"
             
-            # --- NOTIFICATION LOGIC ---
+            # --- STEP C: Storage & Notification ---
+            # Always save to history
+            self.append_to_history(chat_key, formatted_msg)
+            
+            # If the message belongs to a chat I'm NOT looking at...
             if chat_key != self.current_chat:
-                self.append_to_history(chat_key, formatted_msg)
-                if not (sender == self.my_username): # Don't notify for my own echo
+                # Only notify if it's NOT me (I don't need alerts for my own echoes)
+                if sender != self.my_username:
                     alert = f"<div style='color:#ff66b2'><i>🔔 New Message from {sender} in {chat_key}</i></div>"
                     self.chat_area.append(alert)
-            else:
-                self.append_to_history(chat_key, formatted_msg)
-
+                    
     def append_to_history(self, chat_key, html_content):
         # 1. Ensure key exists
         if chat_key not in self.chat_history:

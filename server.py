@@ -157,7 +157,7 @@ class ChatServer:
                     # Send to Recipient
                     self.send_packet(target_socket, "CHAT", content, sender=username, is_private=True)
                     # Echo to Sender
-                    self.send_packet(client, "CHAT", content, sender=username, is_private=True)
+                    self.send_packet(client, "CHAT", content, sender=username, is_private=True, target_group=target)
                 
                 # C. BROADCAST (Everyone)
                 else:
