@@ -1,5 +1,6 @@
 import socket 
 import threading
+import json
 import db_manager
 
 class ChatServer: 
@@ -8,9 +9,19 @@ class ChatServer:
         self.port = port 
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.clients = []
-        self.running = False
         
+        # MAPPING: username -> socket
+        self.clients = {}
+        
+        # GROUPS: group_name -> list of usernames
+        # We pre-define some groups for this example
+        self.groups = {
+            "#General": [],
+            "#Gamers": [],
+            "#Coders": []
+        }
+        
+        self.running = False
         db_manager.initialize_database()
         
     def start(self): 
@@ -21,7 +32,6 @@ class ChatServer:
         self.running = True
         print(f"[LISTENING] Server is listening on {self.host}:{self.port}")
 
-        # Start Admin Thread
         admin_thread = threading.Thread(target=self.admin_write)
         admin_thread.daemon = True
         admin_thread.start()
@@ -42,86 +52,180 @@ class ChatServer:
             
     def stop(self):
         self.running = False
-        for client in self.clients:
+        for client in self.clients.values():
             client.close()
         self.server_socket.close()
         print("[CLOSED] Server socket closed")
 
-    def broadcast(self, message, source_connection=None):
-        for client in self.clients:
-            if client != source_connection:
-                try:
-                    client.sendall(message)
-                except:
-                    if client in self.clients:
-                        self.clients.remove(client)
-                        
+    def send_packet(self, client, type, content, sender="Server", is_private=False, target_group=None):
+        try:
+            packet = {
+                "type": type,
+                "sender": sender,
+                "content": content,
+                "is_private": is_private,
+                "target_group": target_group
+            }
+            client.sendall(json.dumps(packet).encode('utf-8'))
+        except:
+            pass
+
+    def broadcast_packet(self, packet_dict):
+        """Sends to EVERYONE connected"""
+        data = json.dumps(packet_dict).encode('utf-8')
+        # Copy values to avoid runtime error if dict changes size
+        for client in list(self.clients.values()):
+            try:
+                client.sendall(data)
+            except:
+                pass
+
+    def broadcast_user_list(self):
+        """Sends list of Users AND Groups to everyone"""
+        user_list = list(self.clients.keys())
+        group_list = list(self.groups.keys())
+        combined_list = ["Everyone"] + group_list + user_list
+        
+        self.broadcast_packet({
+            "type": "USER_LIST",
+            "content": combined_list,
+            "sender": "Server"
+        })
+
+
     def handle_client(self, client, address):
-        print(f"[NEW CONNECTION] {address} connected", flush=True)
+        print(f"[NEW CONNECTION] {address}", flush=True)
         client_ip = address[0]
         username = None
         
         try:
-            username = self.authenticate_user(client, client_ip)
+            username = self.authenticate_user_json(client, client_ip)
             if not username:
                 return
             
-            self.clients.append(client)
-            print(f"[ACTIVE CONNECTIONS] {len(self.clients)}")
-
-            self.broadcast(f"{username} has joined the chat!".encode('utf-8'), source_connection=client)
+            self.clients[username] = client
             
+            if username not in self.groups["#General"]:
+                self.groups["#General"].append(username)
+
+            print(f"[REGISTERED] {username}")
+            self.broadcast_packet({
+                "type": "SYSTEM",
+                "content": f"{username} has joined the chat!",
+                "sender": "Server"
+            })
+            self.broadcast_user_list()
+            
+            #MESSAGE ROUTING LOOP
             while True:
-                message = client.recv(1024)
-                if not message:
+                msg_bytes = client.recv(1024)
+                if not msg_bytes:
                     break
                 
-                decoded_message = message.decode('utf-8')
-                print(f"{username} : {decoded_message}")
+                try:
+                    msg_data = json.loads(msg_bytes.decode('utf-8'))
+                except:
+                    continue
 
-                self.broadcast(f"{username}: {decoded_message}".encode('utf-8'), source_connection=client)
+                target = msg_data.get('target', 'Everyone')
+                content = msg_data.get('content', '')
+
+                # A. GROUP CHAT (Starts with #)
+                if target.startswith("#"):
+                    if target in self.groups:
+                        # Add user to group if they aren't in it yet (lazy join)
+                        if username not in self.groups[target]:
+                            self.groups[target].append(username)
+                            
+                        # Multicast to group members
+                        for member in self.groups[target]:
+                            if member in self.clients:
+                                self.send_packet(
+                                    self.clients[member], 
+                                    "CHAT", 
+                                    content, 
+                                    sender=username, 
+                                    target_group=target
+                                )
+                
+                # B. DIRECT MESSAGE (Specific User)
+                elif target != "Everyone" and target in self.clients:
+                    target_socket = self.clients[target]
+                    # Send to Recipient
+                    self.send_packet(target_socket, "CHAT", content, sender=username, is_private=True)
+                    # Echo to Sender
+                    self.send_packet(client, "CHAT", content, sender=username, is_private=True)
+                
+                # C. BROADCAST (Everyone)
+                else:
+                    self.broadcast_packet({
+                        "type": "CHAT",
+                        "sender": username,
+                        "content": content,
+                        "is_private": False
+                    })
 
         except Exception as e:
-            print(f"[ERROR] {address}:{e}")
+            print(f"[ERROR] {address}: {e}")
         finally:
-            if client in self.clients:
-                self.clients.remove(client) 
-                print(f"[ACTIVE CONNECTIONS] {len(self.clients)}")
-
-            client.close()
             if username:
-                print(f"[DISCONNECTED] {username} left")
-                self.broadcast(f"{username} has left the chat.".encode('utf-8'))
+                if username in self.clients:
+                    del self.clients[username]
+                # Remove from groups
+                for group in self.groups.values():
+                    if username in group:
+                        group.remove(username)
+                
+                self.broadcast_packet({
+                    "type": "SYSTEM",
+                    "content": f"{username} has left.",
+                    "sender": "Server"
+                })
+                self.broadcast_user_list()
+            client.close()
 
-    def authenticate_user(self, client, client_ip):
+    def authenticate_user_json(self, client, client_ip):
         existing_user = db_manager.get_user_by_ip(client_ip)
+        
         if existing_user:
             registered_name = existing_user[0]
-            client.send(f"Welcome back, {registered_name}! Please enter your password: ".encode('utf-8'))
+            self.send_packet(client, "SYSTEM", f"Welcome back {registered_name}! Enter password:")
+            
             try:
-                password = client.recv(1024).decode('utf-8').strip()
+                # Wait for response 
+                resp = client.recv(1024)
+                data = json.loads(resp.decode('utf-8'))
+                password = data.get('content', '').strip()
+                
                 username = db_manager.verify_login(client_ip, password)
-                if not username:
-                    client.send("Wrong password! Disconnecting...".encode('utf-8'))
+                if username:
+                    self.send_packet(client, "SYSTEM", "Login Successful!")
+                    return username
+                else:
+                    self.send_packet(client, "SYSTEM", "Wrong password. Disconnecting.")
                     client.close()
                     return None
-                else:
-                    client.send(f"Login successful! Welcome {username}.".encode('utf-8'))
-                    return username
             except:
                 return None
         else:
-            client.send("Welcome! You are new. Please enter a username: ".encode('utf-8'))
+            self.send_packet(client, "SYSTEM", "New user! Enter a username:")
             try:
-                new_username = client.recv(1024).decode('utf-8').strip()
-                client.send("Create a password: ".encode('utf-8'))
-                new_password = client.recv(1024).decode('utf-8').strip()
-                success = db_manager.register_user(client_ip, new_username, new_password)
-                if success:
-                    client.send("Registration Successful! You are now logged in.".encode('utf-8'))
+                # Get Username
+                resp = client.recv(1024)
+                data = json.loads(resp.decode('utf-8'))
+                new_username = data.get('content', '').strip()
+                
+                # Get Password
+                self.send_packet(client, "SYSTEM", "Enter a password:")
+                resp = client.recv(1024)
+                data = json.loads(resp.decode('utf-8'))
+                new_password = data.get('content', '').strip()
+                
+                if db_manager.register_user(client_ip, new_username, new_password):
+                    self.send_packet(client, "SYSTEM", "Registered & Logged in!")
                     return new_username
                 else:
-                    client.send("Username taken. Try reconnecting.".encode('utf-8'))
+                    self.send_packet(client, "SYSTEM", "Username taken.")
                     client.close()
                     return None
             except:
@@ -130,8 +234,8 @@ class ChatServer:
     def admin_write(self):
         while True:
             try:
-                message = input("")
-                self.broadcast(f"[ADMIN]: {message}".encode())
+                msg = input("")
+                self.broadcast_packet({"type": "SYSTEM", "sender": "ADMIN", "content": msg})
             except: 
                 break
             

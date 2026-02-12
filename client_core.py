@@ -1,10 +1,9 @@
 import socket
 import threading
+import json
 
 class ChatClient:
     def __init__(self):
-        # Create the socket object (IPv4, TCP) but don't connect yet.
-        # We'll save the socket in 'self' so all methods can use it.
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.connected = False
         self.receive_thread = None
@@ -19,26 +18,31 @@ class ChatClient:
             self.connected = True
             return True, "Connected successfully"
         except Exception as e:
-            # If it fails (server down/ wrong IP), return the error so the GUI can show it
             return False, str(e)
 
-    def send_message(self, msg):
-        """Just takes a string and pushes it through the socket."""
+    def send_message(self, target, msg):
+        """
+        Packs the target and message into a JSON object and sends it.
+        target: "Everyone", "#GroupName", or "Username"
+        """
         if self.connected:
             try:
-                self.sock.sendall(msg.encode('utf-8'))
+                # Create the envelope
+                packet = {
+                    "target": target,
+                    "content": msg
+                }
+                # Convert to JSON string, then bytes
+                json_data = json.dumps(packet)
+                self.sock.sendall(json_data.encode('utf-8'))
                 return True
             except:
-                # If sending fails, the connection is probably dead
                 self.connected = False
                 return False
         return False
 
     def receive_once(self):
-        """
-        Waits for exactly one message 
-        Used for login prompts, etc.
-        """
+        """Waits for one message (used during connection if needed)"""
         try:
             msg = self.sock.recv(1024).decode('utf-8')
             return msg
@@ -46,44 +50,36 @@ class ChatClient:
             return None
 
     def start_listening(self, incoming_message_callback):
-        """
-        Starts the background thread that listens for chat messages.
-        
-        We pass in a 'callback' function here.
-        This allows this core file to send text back to the wherever it has 
-        to be sent without knowing how the external application works
-        """
         self.receive_thread = threading.Thread(
             target=self._listener_loop, 
             args=(incoming_message_callback,)
         )
-        # Daemon means this thread dies automatically if the main program closes
         self.receive_thread.daemon = True
         self.receive_thread.start()
 
     def _listener_loop(self, callback):
-        #The actual code running in the background thread
         while self.connected:
             try:
-                # This line blocks until data arrives
-                msg = self.sock.recv(1024).decode('utf-8')
+                msg_bytes = self.sock.recv(1024)
                 
-                if not msg:
-                    # Empty message = Server cut the line
+                if not msg_bytes:
                     break
                 
-                # We execute the function we were given earlier.
-                # If we are in CLI, this prints else if in GUI, this updates the window.
-                callback(msg) 
+                # Unpack the JSON data
+                try:
+                    msg_dict = json.loads(msg_bytes.decode('utf-8'))
+                    callback(msg_dict) 
+                except json.JSONDecodeError:
+                    # Fallback for non-JSON system messages if any
+                    callback({"type": "SYSTEM", "content": msg_bytes.decode('utf-8')})
+                    
             except:
                 break
         
-        # Cleanup if the loop breaks (disconnection)
         self.connected = False
         self.sock.close()
-        callback("[SYSTEM] Connection Closed")
+        callback({"type": "SYSTEM", "content": "Connection Closed"})
 
     def close(self):
-        """Clean shutdown."""
         self.connected = False
         self.sock.close()
