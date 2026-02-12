@@ -109,6 +109,9 @@ class ChatServer:
                 self.groups["#General"].append(username)
 
             print(f"[REGISTERED] {username}")
+            
+            self.send_packet(client, "LOGIN_SUCCESS", username, sender="Server")
+            
             self.broadcast_packet({
                 "type": "SYSTEM",
                 "content": f"{username} has joined the chat!",

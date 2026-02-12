@@ -302,6 +302,10 @@ class ChatWindow(QWidget):
             elif is_private:
                 # Incoming DM from someone else
                 chat_key = sender
+                
+            if sender == self.my_username:
+                if is_private:
+                    chat_key = self.current_chat
 
             # --- COLOR FORMATTING ---
             color = "orange"
