@@ -66,13 +66,13 @@ class ChatServer:
                 "is_private": is_private,
                 "target_group": target_group
             }
-            client.sendall(json.dumps(packet).encode('utf-8'))
+            client.sendall((json.dumps(packet) + "\n").encode('utf-8'))
         except:
             pass
 
     def broadcast_packet(self, packet_dict):
         """Sends to EVERYONE connected"""
-        data = json.dumps(packet_dict).encode('utf-8')
+        data = (json.dumps(packet_dict) + "\n").encode('utf-8')
         # Copy values to avoid runtime error if dict changes size
         for client in list(self.clients.values()):
             try:
