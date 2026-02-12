@@ -274,66 +274,55 @@ class ChatWindow(QWidget):
         content = msg_dict.get("content", "")
         sender = msg_dict.get("sender", "Unknown")
         
-        if type == "USER_LIST":
-            # Update Right Panel (Online Users)
+        # --- FIX 1: Handle Login Success explicitly ---
+        if type == "LOGIN_SUCCESS":
+            self.my_username = content # Now we 100% know who we are
+            self.append_to_history("#General", f"<div style='color:green'><i>Logged in as {content}</i></div>")
+            return
+
+        elif type == "USER_LIST":
             self.active_users_list.clear()
-            # For now, we just update the Right Panel.
             for user in content:
-                # Assuming 'content' includes groups, filter them out for the user list
                 if not user.startswith("#") and user != "Everyone": 
                     self.active_users_list.addItem(user)
                     
         elif type == "SYSTEM":
-            # System messages go to the current window OR #General
-            formatted_msg = f"<div style='color:#888'><i>[SYSTEM]: {content}</i></div>"
-            self.append_to_history(self.current_chat, formatted_msg)
-            
-            # Basic login detection to save my own username
-            if "Welcome" in content and "Login successful" in content:
-                # content looks like: "Login successful! Welcome Alice."
-                parts = content.split("Welcome ")
-                if len(parts) > 1:
-                     self.my_username = parts[1].replace(".", "")
+            self.append_to_history(self.current_chat, f"<div style='color:#888'><i>[SYSTEM]: {content}</i></div>")
 
         elif type == "CHAT":
             is_private = msg_dict.get("is_private", False)
             target_group = msg_dict.get("target_group", None)
             
-            # Determine which "Chat Room" this belongs to
-            chat_key = "#General" # Fallback
+            chat_key = "#General" 
             
             if target_group:
-                # It's a Group Message
+                # If it's a group, the key is the group name
+                # OR if it's a Private Echo, the key is the Recipient (which server now puts in target_group)
                 chat_key = target_group
             elif is_private:
-                # It's a DM. 
-                # If I sent it, key is recipient. If I received it, key is sender.
-                if sender == self.my_username:
-                    # I sent this, but the server echoed it back.
-                    # We need to know who I sent it TO.
-                    # The current server echo doesn't explicitly say "recipient" in the echo.
-                    # Ideally, we assume if we are in a DM window, it goes there.
-                    # For now, let's just put it in the currently selected chat if it's a DM 
-                    # OR we can assume the server echo needs improvement. 
-                    chat_key = self.current_chat 
-                else:
-                    chat_key = sender # Message from Alice -> goes to "Alice" tab
+                # Incoming DM from someone else
+                chat_key = sender
 
-            # Formatting
+            # --- COLOR FORMATTING ---
             color = "orange"
-            if is_private: color = "#ff66b2" # Pink
-            elif target_group: color = "#66ff66" # Green
+            if is_private: color = "#ff66b2" 
+            elif target_group and target_group.startswith("#"): color = "#66ff66" 
             
+            display_sender = sender
             if sender == self.my_username:
                 display_sender = "You"
-                color = "#4a90e2" # Blue
-            else:
-                display_sender = sender
+                color = "#4a90e2" 
                 
             formatted_msg = f"<div style='margin-bottom:5px;'><span style='color:{color}; font-weight:bold;'>{display_sender}:</span> {content}</div>"
             
-            # Add to storage
-            self.append_to_history(chat_key, formatted_msg)
+            # --- NOTIFICATION LOGIC ---
+            if chat_key != self.current_chat:
+                self.append_to_history(chat_key, formatted_msg)
+                if not (sender == self.my_username): # Don't notify for my own echo
+                    alert = f"<div style='color:#ff66b2'><i>🔔 New Message from {sender} in {chat_key}</i></div>"
+                    self.chat_area.append(alert)
+            else:
+                self.append_to_history(chat_key, formatted_msg)
 
     def append_to_history(self, chat_key, html_content):
         # 1. Ensure key exists
