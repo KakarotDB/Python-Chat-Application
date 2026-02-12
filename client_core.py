@@ -33,7 +33,7 @@ class ChatClient:
                     "content": msg
                 }
                 # Convert to JSON string, then bytes
-                json_data = json.dumps(packet)
+                json_data = json.dumps(packet) + "\n"
                 self.sock.sendall(json_data.encode('utf-8'))
                 return True
             except:
