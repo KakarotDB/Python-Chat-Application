@@ -58,21 +58,25 @@ class ChatClient:
         self.receive_thread.start()
 
     def _listener_loop(self, callback):
+        buffer = ""
         while self.connected:
             try:
-                msg_bytes = self.sock.recv(1024)
-                
-                if not msg_bytes:
+                data = self.sock.recv(1024).decode('utf-8')
+                if not data:
                     break
                 
-                # Unpack the JSON data
-                try:
-                    msg_dict = json.loads(msg_bytes.decode('utf-8'))
-                    callback(msg_dict) 
-                except json.JSONDecodeError:
-                    # Fallback for non-JSON system messages if any
-                    callback({"type": "SYSTEM", "content": msg_bytes.decode('utf-8')})
+                buffer += data
+                
+                # SPLIT LOGIC: Process complete messages ending in \n
+                while "\n" in buffer:
+                    message, buffer = buffer.split("\n", 1)
                     
+                    if message.strip():
+                        try:
+                            msg_dict = json.loads(message)
+                            callback(msg_dict)
+                        except json.JSONDecodeError:
+                            callback({"type": "SYSTEM", "content": message})
             except:
                 break
         
