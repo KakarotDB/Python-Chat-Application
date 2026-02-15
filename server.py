@@ -119,14 +119,23 @@ class ChatServer:
             })
             self.broadcast_user_list()
             
-            #MESSAGE ROUTING LOOP
+            buffer = ""
             while True:
-                msg_bytes = client.recv(1024)
-                if not msg_bytes:
-                    break
-                
                 try:
-                    msg_data = json.loads(msg_bytes.decode('utf-8'))
+                    data = client.recv(1024).decode('utf-8')
+                    if not data:
+                        break
+                    
+                    buffer += data
+                    
+                    while '\n' in buffer:
+                        message, buffer = buffer.split('\n', 1)
+                        if not message.strip(): continue
+                        
+                        try:
+                            msg_data = json.loads(message)
+                        except:
+                            continue
                 except:
                     continue
 
