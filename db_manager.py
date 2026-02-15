@@ -4,52 +4,50 @@ import bcrypt
 DB_NAME = "chat_users.db"
 
 def initialize_database():
-    """Creates the database if it doesn't exist"""
-    connection = sqlite3.connect(DB_NAME) #creates new DB
-    cursor = connection.cursor() #DB cursor to fetch/execute SQL queries
-    cursor.execute('''CREATE TABLE IF NOT EXISTS users( 
-        ip_address TEXT PRIMARY KEY, 
-        username TEXT UNIQUE,
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    # Username is now the PRIMARY KEY. We don't care about IP for auth anymore.
+    cursor.execute('''CREATE TABLE IF NOT EXISTS users(
+        username TEXT PRIMARY KEY,
         password_hash BLOB
-    )''') #create table users if not exists
-    connection.commit()
-    connection.close()
+    )''')
+    conn.commit()
+    conn.close()
 
-def get_user_by_ip(ip: str): #Checks if IP already exists
-    connection = sqlite3.connect(DB_NAME)
-    cursor = connection.cursor()
-    cursor.execute("SELECT username, password_hash FROM users WHERE ip_address = ?", (ip, ))
-    #Select the username and password hash from the users where ip address is present
-    user = cursor.fetchone() #returns username, hash or none
-    connection.close()
-    return user
+def user_exists(username):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("SELECT 1 FROM users WHERE username = ?", (username,))
+    exists = cursor.fetchone()
+    conn.close()
+    return exists is not None
 
-def register_user(ip, username, password):
-    """Saves a new user with a hashed password"""
+def register_user(username, password):
+    if user_exists(username):
+        return False
+        
     salt = bcrypt.gensalt()
     hashed_pw = bcrypt.hashpw(password.encode('utf-8'), salt)
 
-    try :
-        connection = sqlite3.connect(DB_NAME)
-        cursor = connection.cursor()
-        cursor.execute("INSERT INTO users (ip_address, username, password_hash) VALUES (?, ?, ?)", (ip, username, hashed_pw))
-        connection.commit()
-        connection.close()
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO users (username, password_hash) VALUES (?, ?)", (username, hashed_pw))
+        conn.commit()
+        conn.close()
         return True
-    except sqlite3.IntegrityError:
+    except:
         return False
 
-def verify_login(ip, password_attempt):
-    """Checks if password matches the password on the current IP"""
-    user = get_user_by_ip(ip)
-    if not user:
-        return False
+def check_credentials(username, password_attempt):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("SELECT password_hash FROM users WHERE username = ?", (username,))
+    record = cursor.fetchone()
+    conn.close()
 
-    stored_username, stored_hash = user
-
-    if bcrypt.checkpw(password_attempt.encode('utf-8'), stored_hash):
-        return stored_username
-    else:
-        return False
-
-
+    if record:
+        stored_hash = record[0]
+        if bcrypt.checkpw(password_attempt.encode('utf-8'), stored_hash):
+            return True
+    return False

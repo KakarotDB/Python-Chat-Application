@@ -10,11 +10,7 @@ class ChatServer:
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         
-        # MAPPING: username -> socket
         self.clients = {}
-        
-        # GROUPS: group_name -> list of usernames
-        # We pre-define some groups for this example
         self.groups = {
             "#General": [],
             "#Gamers": [],
@@ -71,9 +67,7 @@ class ChatServer:
             pass
 
     def broadcast_packet(self, packet_dict):
-        """Sends to EVERYONE connected"""
         data = (json.dumps(packet_dict) + "\n").encode('utf-8')
-        # Copy values to avoid runtime error if dict changes size
         for client in list(self.clients.values()):
             try:
                 client.sendall(data)
@@ -81,17 +75,36 @@ class ChatServer:
                 pass
 
     def broadcast_user_list(self):
-        """Sends list of Users AND Groups to everyone"""
         user_list = list(self.clients.keys())
         group_list = list(self.groups.keys())
         combined_list = ["Everyone"] + group_list + user_list
-        
         self.broadcast_packet({
             "type": "USER_LIST",
             "content": combined_list,
             "sender": "Server"
         })
 
+    #
+    def receive_json_secure(self, client, buffer):
+        """
+        Safely receives one JSON packet using buffer logic.
+        Returns: (decoded_json, updated_buffer)
+        """
+        while "\n" not in buffer:
+            try:
+                data = client.recv(1024).decode('utf-8')
+                if not data: 
+                    return None, buffer
+                buffer += data
+            except:
+                return None, buffer
+        
+        
+        message, buffer = buffer.split("\n", 1)
+        try:
+            return json.loads(message), buffer
+        except:
+            return None, buffer
 
     def handle_client(self, client, address):
         print(f"[NEW CONNECTION] {address}", flush=True)
@@ -99,23 +112,18 @@ class ChatServer:
         username = None
         
         try:
-            username = self.authenticate_user_json(client, client_ip)
+            username = self.authenticate_user_json(client)
             if not username:
                 return
             
             self.clients[username] = client
-            
             if username not in self.groups["#General"]:
                 self.groups["#General"].append(username)
 
             print(f"[REGISTERED] {username}")
-            
             self.send_packet(client, "LOGIN_SUCCESS", username, sender="Server")
-            
             self.broadcast_packet({
-                "type": "SYSTEM",
-                "content": f"{username} has joined the chat!",
-                "sender": "Server"
+                "type": "SYSTEM", "content": f"{username} has joined!", "sender": "Server"
             })
             self.broadcast_user_list()
             
@@ -123,9 +131,7 @@ class ChatServer:
             while True:
                 try:
                     data = client.recv(1024).decode('utf-8')
-                    if not data:
-                        break
-                    
+                    if not data: break
                     buffer += data
                     
                     while '\n' in buffer:
@@ -136,112 +142,106 @@ class ChatServer:
                             msg_data = json.loads(message)
                         except:
                             continue
-                except:
-                    continue
 
-                target = msg_data.get('target', 'Everyone')
-                content = msg_data.get('content', '')
+                        target = msg_data.get('target', 'Everyone')
+                        content = msg_data.get('content', '')
 
-                # A. GROUP CHAT (Starts with #)
-                if target.startswith("#"):
-                    if target in self.groups:
-                        # Add user to group if they aren't in it yet (lazy join)
-                        if username not in self.groups[target]:
-                            self.groups[target].append(username)
-                            
-                        # Multicast to group members
-                        for member in self.groups[target]:
-                            if member in self.clients:
-                                self.send_packet(
-                                    self.clients[member], 
-                                    "CHAT", 
-                                    content, 
-                                    sender=username, 
-                                    target_group=target
-                                )
-                
-                # B. DIRECT MESSAGE (Specific User)
-                elif target != "Everyone" and target in self.clients:
-                    target_socket = self.clients[target]
-                    # Send to Recipient
-                    self.send_packet(target_socket, "CHAT", content, sender=username, is_private=True)
-                    # Echo to Sender
-                    self.send_packet(client, "CHAT", content, sender=username, is_private=True, target_group=target)
-                
-                # C. BROADCAST (Everyone)
-                else:
-                    self.broadcast_packet({
-                        "type": "CHAT",
-                        "sender": username,
-                        "content": content,
-                        "is_private": False
-                    })
+                        if target.startswith("#"):
+                            if target in self.groups:
+                                if username not in self.groups[target]:
+                                    self.groups[target].append(username)
+                                for member in self.groups[target]:
+                                    if member in self.clients:
+                                        self.send_packet(self.clients[member], "CHAT", content, sender=username, target_group=target)
+                        elif target != "Everyone" and target in self.clients:
+                            target_socket = self.clients[target]
+                            self.send_packet(target_socket, "CHAT", content, sender=username, is_private=True)
+                            self.send_packet(client, "CHAT", content, sender=username, is_private=True, target_group=target)
+                        else:
+                            self.broadcast_packet({
+                                "type": "CHAT", "sender": username, "content": content, "is_private": False
+                            })
 
+                except Exception:
+                    break
         except Exception as e:
             print(f"[ERROR] {address}: {e}")
         finally:
-            if username:
-                if username in self.clients:
-                    del self.clients[username]
-                # Remove from groups
+            if username and username in self.clients:
+                del self.clients[username]
                 for group in self.groups.values():
-                    if username in group:
-                        group.remove(username)
-                
-                self.broadcast_packet({
-                    "type": "SYSTEM",
-                    "content": f"{username} has left.",
-                    "sender": "Server"
-                })
+                    if username in group: group.remove(username)
+                self.broadcast_packet({"type": "SYSTEM", "content": f"{username} left.", "sender": "Server"})
                 self.broadcast_user_list()
             client.close()
 
-    def authenticate_user_json(self, client, client_ip):
-        existing_user = db_manager.get_user_by_ip(client_ip)
+    def authenticate_user_json(self, client):
+        auth_buffer = ""
         
-        if existing_user:
-            registered_name = existing_user[0]
-            self.send_packet(client, "SYSTEM", f"Welcome back {registered_name}! Enter password:")
+        self.send_packet(client, "SYSTEM", "Welcome! Type '1' to Login or '2' to Register:")
+        
+        try:
+            data, auth_buffer = self.receive_json_secure(client, auth_buffer)
+            if not data: return None
             
-            try:
-                # Wait for response 
-                resp = client.recv(1024)
-                data = json.loads(resp.decode('utf-8'))
+            choice = data.get('content', '').strip()
+            
+            # OPTION 1: LOGIN 
+            if choice == '1' or choice.lower() == 'login':
+                self.send_packet(client, "SYSTEM", "Username:")
+                
+                data, auth_buffer = self.receive_json_secure(client, auth_buffer) # Safe Receive
+                if not data: return None
+                username = data.get('content', '').strip()
+                
+                self.send_packet(client, "SYSTEM", "Password:")
+                
+                data, auth_buffer = self.receive_json_secure(client, auth_buffer) # Safe Receive
+                if not data: return None
                 password = data.get('content', '').strip()
                 
-                username = db_manager.verify_login(client_ip, password)
-                if username:
+                if db_manager.check_credentials(username, password):
                     self.send_packet(client, "SYSTEM", "Login Successful!")
                     return username
                 else:
-                    self.send_packet(client, "SYSTEM", "Wrong password. Disconnecting.")
+                    self.send_packet(client, "SYSTEM", "Invalid username or password.")
                     client.close()
                     return None
-            except:
-                return None
-        else:
-            self.send_packet(client, "SYSTEM", "New user! Enter a username:")
-            try:
-                # Get Username
-                resp = client.recv(1024)
-                data = json.loads(resp.decode('utf-8'))
+
+            # OPTION 2: REGISTER 
+            elif choice == '2' or choice.lower() == 'register':
+                self.send_packet(client, "SYSTEM", "Choose a Username:")
+                
+                data, auth_buffer = self.receive_json_secure(client, auth_buffer) # Safe Receive
+                if not data: return None
                 new_username = data.get('content', '').strip()
                 
-                # Get Password
-                self.send_packet(client, "SYSTEM", "Enter a password:")
-                resp = client.recv(1024)
-                data = json.loads(resp.decode('utf-8'))
-                new_password = data.get('content', '').strip()
-                
-                if db_manager.register_user(client_ip, new_username, new_password):
-                    self.send_packet(client, "SYSTEM", "Registered & Logged in!")
-                    return new_username
-                else:
-                    self.send_packet(client, "SYSTEM", "Username taken.")
+                if db_manager.user_exists(new_username):
+                    self.send_packet(client, "SYSTEM", "Username already taken.")
                     client.close()
                     return None
-            except:
+                
+                self.send_packet(client, "SYSTEM", "Choose a Password:")
+                
+                data, auth_buffer = self.receive_json_secure(client, auth_buffer) # Safe Receive
+                if not data: return None
+                new_password = data.get('content', '').strip()
+                
+                if db_manager.register_user(new_username, new_password):
+                    self.send_packet(client, "SYSTEM", "Account created! You are now logged in.")
+                    return new_username
+                else:
+                    self.send_packet(client, "SYSTEM", "Error creating account.")
+                    client.close()
+                    return None
+            else:
+                self.send_packet(client, "SYSTEM", "Invalid choice. Disconnecting.")
+                client.close()
                 return None
+
+        except Exception as e:
+            print(f"[AUTH ERROR] {e}")
+            return None
             
     def admin_write(self):
         while True:
@@ -250,7 +250,7 @@ class ChatServer:
                 self.broadcast_packet({"type": "SYSTEM", "sender": "ADMIN", "content": msg})
             except: 
                 break
-            
+
 if __name__ == "__main__":
     print("Starting server...")
     server = ChatServer("0.0.0.0", 65432)
