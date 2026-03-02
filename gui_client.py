@@ -386,7 +386,7 @@ if __name__ == "__main__":
     # Taskbar Icon Fix
     try:
         import ctypes
-        myappid = 'mycompany.chat.1.0'
+        myappid = 'PythonChatApplication.1.1'
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
     except:
         pass
