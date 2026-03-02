@@ -1,56 +1,98 @@
-# Python Chat Application
+# Python Real-Time Chat Application
 
-A simple client-server chat application built using Python's `socket` library. This project demonstrates basic networking concepts including TCP/IP communication and Inter-Process Communication (IPC).
+A robust, multi-threaded client-server chat application built using Python. Originally a simple CLI tool, this project has been upgraded to feature a modern graphical user interface (GUI), secure user authentication, and a custom JSON-based TCP networking protocol.
 
 ## Features
-* **Client-Server Architecture:** A central server that listens for incoming connections.
-* **Real-time Messaging:** Two-way communication between client and server.
-* **TCP Sockets:** Uses reliable TCP protocol for data transmission.
-* **Multi Threading:** Uses multi threading to allow multiple clients to send messages at the same time 
 
-## Prerequisites
-* Python 3.x installed on your machine.
-* OR Simply install the client.exe/server.exe files
+* **Graphical User Interface:** A clean, dark-themed UI built with PyQt6, featuring separate tabs for different conversations.
+* **Secure Authentication:** User registration and login functionality backed by a local SQLite database and bcrypt password hashing.
+* **Group & Private Messaging:** Support for global channels (e.g., `#General`, `#Coders`, `#Gamers`) as well as one-on-one direct messaging (DMs).
+* **Real-Time Online Roster:** A live-updating sidebar displaying currently connected users.
+* **Robust TCP Networking:** Custom buffer management using newline-delimited JSON to safely handle fragmented or "sticky" network packets.
+* **Multi-Threading:** Allows the server to handle multiple clients concurrently without blocking.
 
-## How to run (using executables)
-1. Go to dist/ folder and download **client.exe** executable
-2. Enter the IPv4 address and connect with local network !
-3. Similar procedure for the **server.exe** executable
+## Prerequisites & Setup
 
-## How to Run (local machine)
-1.  **Start the Server:**
-    Open your terminal and run the server first to start listening for connections:
-    ```bash
-    python server.py
-    ```
+* **Python 3.12 or 3.13** (Note: Python 3.14+ may require manual C++ compilation for the PyQt6 library, so 3.12/3.13 is highly recommended).
 
-2.  **Start the Client:**
-    Open a **separate** terminal window (keep the server running) and run the client:
-    ```bash
-    python client.py
-    ```
+It is recommended to use a virtual environment to install the dependencies (`PyQt6` and `bcrypt`).
 
-3.  **Start Chatting:**
-    Type a message in the client terminal and press Enter to send it to the server.
+1. **Create a virtual environment:**
 
-## How to Run (local network)
-1. **Start the server**
-    Open a terminal and run the server to start listening to any connections on the local network (make sure the host is "0.0.0.0")
-    ```bash
-    python server.py
-    ```
-2. **Start the Client**
-    On another machine over the same network, connect to the IPv4 address (found using ipconfig on windows systems) and replace the HOST to required IPv4 address
    ```bash
-    python client.py
-    ```
-3. **Start Chatting**
-    Now messages can be sent and received via different machines over the same local network
+   python -m venv .venv
+   ```
+
+   *(Windows users can also use the launcher: `py -3.13 -m venv .venv`)*
+
+2. **Activate the virtual environment:**
+   * **Windows:**
+
+     ```cmd
+     .venv\Scripts\activate
+     ```
+
+   * **macOS/Linux:**
+
+     ```bash
+     source .venv/bin/activate
+     ```
+
+3. **Install the required libraries:**
+
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+## How to Run (Local Machine)
+
+1. **Start the Server:**
+   Open a terminal, activate your virtual environment, and run the server. (On the first run, it will automatically generate the `chat_users.db` database).
+
+   ```bash
+   python server.py
+   ```
+
+   *You should see a message indicating the server is listening on 0.0.0.0:65432.*
+
+2. **Start the Client:**
+   Open a **separate** terminal window, activate the virtual environment, and launch the GUI client:
+
+   ```bash
+   python gui_client.py
+   ```
+
+3. **Connect and Authenticate:**
+   * In the client window, enter `127.0.0.1` and click Connect.
+   * The server will prompt you in the chat box to type `1` to Login or `2` to Register. Type your response directly into the message input field and press Send.
+
+## How to Run (Local Network)
+
+1. **Start the Server:**
+   Run `server.py` on your host machine. Make sure the host IP in the script is set to `0.0.0.0` to accept external connections.
+2. **Start the Client:**
+   On a different machine on the same network, open `gui_client.py`.
+3. **Connect:**
+   Instead of `127.0.0.1`, enter the local IPv4 address of the host machine (found using `ipconfig` on Windows or `ifconfig` on macOS/Linux).
+
+## How to Run (Using Executables)
+
+If you do not want to set up Python, you can use the standalone executables:
+
+1. Navigate to the `dist/` folder.
+2. Run `server.exe` on the host machine.
+3. Distribute and run `ChatClient.exe` on client machines, entering the host's IPv4 address to connect.
+
+## Project Structure
+
+* `server.py` - Central server handling connections, routing, and user sessions.
+* `gui_client.py` - Main application executable containing the PyQt6 interface.
+* `client_core.py` - Networking backend handling socket transmission and buffering.
+* `db_manager.py` - Database handler for `chat_users.db` and credential verification.
+* `requirements.txt` - Project dependencies.
 
 ## Technologies Used
-* **Language:** Python 3
-* **Library:** `socket`, `threading` (Standard Libraries)
-* **Protocol:** TCP/IP
 
-## Project Goal
-This project was created to understand the fundamentals of network layers, socket programming, and how data is exchanged between processes.
+* **Language:** Python 3
+* **Libraries:** `socket`, `threading`, `json`, `sqlite3` (Standard), `PyQt6`, `bcrypt` (Third-party)
+* **Protocol:** TCP/IP
